@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>SimTX HF Planner</title>
+<meta name="description" content="SimTX HF Planner - Calculate HF antenna parameters and path between two locations for SimTX.">
+
+<!-- Leaflet Map -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+
+<style>
+
+:root {
+    --bg:#111827;
+    --panel:#1f2937;
+    --text:#f9fafb;
+    --accent:#38bdf8;
+    --green:#22c55e;
+    --danger:#ef4444;
+}
+
+body {
+    margin:0;
+    padding:20px;
+    font-family:Arial, Helvetica, sans-serif;
+    background:radial-gradient(circle at top, #1e293b 0%, var(--bg) 60%);
+    color:var(--text);
+    transition:background .25s ease, color .25s ease;
+}
+
+body[data-theme="light"] {
+    --bg:#f8fafc;
+    --panel:#ffffff;
+    --text:#0f172a;
+    --accent:#2563eb;
+    --green:#16a34a;
+    --danger:#dc2626;
+}
+
+h1 {
+    text-align:center;
+    color:var(--accent);
+}
+
+.container {
+    max-width:1200px;
+    margin:auto;
+}
+
+.grid {
+    display:grid;
+    grid-template-columns:350px 1fr;
+    gap:20px;
+}
+
+.panel {
+    background:var(--panel);
+    padding:20px;
+    border-radius:15px;
+    box-shadow:0 0 15px #0005;
+    border:1px solid rgba(255,255,255,0.08);
+}
+
+.button-row {
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-top:12px;
+}
+
+.button-row button {
+    flex:1 1 180px;
+}
+
+button.secondary {
+    background:#334155;
+}
+
+button.secondary:hover {
+    background:#475569;
+}
+
+.muted {
+    opacity:.85;
+    font-size:13px;
+    margin-top:8px;
+}
+
+#output ul {
+    padding-left:18px;
+    margin:8px 0 0;
+}
+
+#output li {
+    margin-bottom:6px;
+}
+
+
+label {
+    display:block;
+    margin-top:10px;
+}
+
+input, select, button {
+    width:100%;
+    padding:10px;
+    margin-top:5px;
+    border-radius:8px;
+    border:none;
+    font-size:15px;
+}
+
+
+button {
+    background:var(--accent);
+    cursor:pointer;
+    font-weight:bold;
+}
+
+
+button:hover {
+    opacity:.8;
+}
+
+
+.result {
+    margin-top:15px;
+    line-height:1.7;
+}
+
+
+.value {
+    color:#38bdf8;
+    font-weight:bold;
+}
+
+
+.good {
+    color:var(--green);
+}
+
+
+.hot {
+    color:var(--danger);
+}
+
+
+#map {
+    height:500px;
+    border-radius:15px;
+}
+
+
+.card {
+    background:#111827;
+    padding:15px;
+    margin-top:15px;
+    border-radius:10px;
+}
+
+
+@media(max-width:900px){
+
+.grid {
+    grid-template-columns:1fr;
+}
+
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+<div class="container">
+
+<h1>📡 SimTX HF Planner</h1>
+<p>Note: this tool is made by AI and might not be 100% always accurate</p>
+
+
+<div class="grid">
+
+
+<!-- CONTROLES -->
+
+<div class="panel">
+
+<h2>Configuration</h2>
+
+
+<label>
+Frequency (MHz)
+<input id="frequency" type="number" step="0.001" value="4.625">
+</label>
+
+
+<label>
+TX Power (W)
+<input id="power" type="number" value="500">
+</label>
+
+
+
+<label>
+Antenna
+<select id="antenna">
+
+<option value="dipole">
+Dipole
+</option>
+
+<option value="inverted">
+Inverted-V
+</option>
+
+<option value="vertical">
+Vertical
+</option>
+
+<option value="yagi3">
+Yagi 3 elements
+</option>
+
+<option value="yagi5" selected>
+Yagi 5 elements
+</option>
+
+<option value="loop">
+Full-wave Loop
+</option>
+
+<option value="longwire">
+Longwire
+</option>
+
+<option value="beverage">
+Beverage
+</option>
+
+<option value="efhw">
+EFHW + 49:1
+</option>
+
+</select>
+</label>
+
+
+
+<label>
+Transmitter
+<select id="tx">
+
+<option value="sdr">
+Modern SDR
+</option>
+
+<option value="generic">
+Generic HF
+</option>
+
+<option value="tube" selected>
+Vintage Tube
+</option>
+
+<option value="am">
+Vintage AM
+</option>
+
+<option value="classe">
+Class-E
+</option>
+
+<option value="overdrive">
+Overdriven
+</option>
+
+</select>
+</label>
+
+
+
+<label>
+Line length (m)
+<input id="lineLength" type="number" value="35">
+</label>
+
+<hr>
+
+
+<h3>Location</h3>
+
+
+<label>
+TX (city)
+<input id="txCity" value="Kerro">
+</label>
+
+
+<label>
+RX (city)
+<input id="rxCity" value="Budapest">
+</label>
+
+
+<div class="button-row">
+<button onclick="calculateRoute()">
+🌍 Calculate path
+</button>
+
+
+<button onclick="calculateHF()">
+📡 Calculate HF
+</button>
+
+<button class="secondary" data-action="toggle-theme" onclick="toggleTheme()">
+🌙 Dark mode
+</button>
+
+<button class="secondary" onclick="savePreset()">
+💾 Save preset
+</button>
+
+<button class="secondary" onclick="loadPreset()">
+🔄 Load preset
+</button>
+</div>
+
+<div id="presetStatus" class="muted">No preset saved.</div>
+
+
+</div>
+
+
+
+<!-- RESULTATS -->
+
+<div>
+
+
+<div class="panel">
+
+<h2>Map</h2>
+
+<div id="map"></div>
+
+</div>
+
+
+
+<div class="panel result">
+
+<h2>Results</h2>
+
+
+<div id="output">
+
+No calculation performed yet.
+
+</div>
+
+
+</div>
+
+
+
+</div>
+
+
+</div>
+
+</div>
+
+
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+
+<script>
+
+let map = L.map('map').setView([50,10],4);
+
+
+L.tileLayer(
+'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+{
+maxZoom:18
+}
+).addTo(map);
+
+
+
+let txMarker;
+let rxMarker;
+let route;
+
+const antennaProfiles = {
+    dipole: { name: 'Dipole', gain: 2.1, startAngle: 35, factor: 0.5, heightFactor: 0.75, dimensionLabel: 'λ/2' },
+    inverted: { name: 'Inverted-V', gain: 1.9, startAngle: 32, factor: 0.48, heightFactor: 0.7, dimensionLabel: '≈ 0.48λ' },
+    vertical: { name: 'Vertical', gain: 1.7, startAngle: 40, factor: 0.25, heightFactor: 0.6, dimensionLabel: 'λ/4' },
+    yagi3: { name: 'Yagi 3 elements', gain: 6.0, startAngle: 24, factor: 0.4, heightFactor: 0.55, dimensionLabel: '0.4λ' },
+    yagi5: { name: 'Yagi 5 elements', gain: 8.2, startAngle: 18, factor: 0.4, heightFactor: 0.55, dimensionLabel: '0.4λ' },
+    loop: { name: 'Full-wave Loop', gain: 2.3, startAngle: 33, factor: 1, heightFactor: 0.8, dimensionLabel: '1λ' },
+    longwire: { name: 'Longwire', gain: 3.0, startAngle: 28, factor: 1, heightFactor: 0.85, dimensionLabel: '1λ' },
+    beverage: { name: 'Beverage', gain: 6.4, startAngle: 20, factor: 1.5, heightFactor: 0.9, dimensionLabel: '1.5λ' },
+    efhw: { name: 'EFHW + 49:1', gain: 2.2, startAngle: 34, factor: 0.5, heightFactor: 0.7, dimensionLabel: 'λ/2' }
+};
+
+const transmitterProfiles = {
+    sdr: { name: 'Modern SDR', gainBonus: 0.4, angleBonus: 0, lineLossBase: 0.12, tempBase: 35 },
+    generic: { name: 'Generic HF', gainBonus: 0.2, angleBonus: 2, lineLossBase: 0.18, tempBase: 40 },
+    tube: { name: 'Vintage Tube', gainBonus: -0.3, angleBonus: 4, lineLossBase: 0.28, tempBase: 58 },
+    am: { name: 'Vintage AM', gainBonus: -0.5, angleBonus: 5, lineLossBase: 0.35, tempBase: 62 },
+    classe: { name: 'Class-E', gainBonus: 0.7, angleBonus: -1, lineLossBase: 0.14, tempBase: 32 },
+    overdrive: { name: 'Overdriven', gainBonus: 0.1, angleBonus: 3, lineLossBase: 0.4, tempBase: 70 }
+};
+
+function getValue(id) {
+    return document.getElementById(id).value;
+}
+
+function getNumber(id) {
+    return parseFloat(getValue(id)) || 0;
+}
+
+function getAntennaProfile() {
+    return antennaProfiles[getValue('antenna')] || antennaProfiles.dipole;
+}
+
+function getTransmitterProfile() {
+    return transmitterProfiles[getValue('tx')] || transmitterProfiles.generic;
+}
+
+function calculateHF() {
+    const freqMHz = getNumber('frequency');
+    const powerW = getNumber('power');
+    const lineLength = getNumber('lineLength');
+    const antenna = getAntennaProfile();
+    const tx = getTransmitterProfile();
+
+    if (freqMHz <= 0) {
+        document.getElementById('output').innerHTML = '<p>Frequency must be greater than 0.</p>';
+        return;
+    }
+
+    const wavelengthM = 300 / freqMHz;
+    const lengthM = wavelengthM * antenna.factor;
+    const heightM = wavelengthM * antenna.heightFactor;
+    const gainDb = antenna.gain + tx.gainBonus;
+    const startAngle = Math.max(10, Math.min(75, antenna.startAngle + tx.angleBonus));
+    const lineLossDb = Math.max(0.1, lineLength * 0.015 + tx.lineLossBase + freqMHz * 0.002);
+    const erpW = powerW * Math.pow(10, gainDb / 10);
+    const effectivePowerW = powerW * Math.pow(10, -lineLossDb / 10);
+    const txTemp = Math.round(tx.tempBase + (powerW / 20000) + freqMHz * 3 + lineLossDb * 8);
+
+    document.getElementById('output').innerHTML = `
+        <ul>
+            <li><strong>Antenna:</strong> ${antenna.name}</li>
+            <li><strong>Wavelength:</strong> ${wavelengthM.toFixed(2)} m</li>
+            <li><strong>Dimensions:</strong> ${lengthM.toFixed(2)} m (${antenna.dimensionLabel}) • height ≈ ${heightM.toFixed(2)} m</li>
+            <li><strong>Estimated gain:</strong> ${gainDb.toFixed(1)} dBi</li>
+            <li><strong>Takeoff angle:</strong> ${startAngle.toFixed(0)}°</li>
+            <li><strong>Line losses:</strong> ${lineLossDb.toFixed(2)} dB</li>
+            <li><strong>ERP:</strong> ${erpW.toFixed(2)} W</li>
+            <li><strong>Useful power:</strong> ${effectivePowerW.toFixed(2)} W</li>
+            <li><strong>Estimated TX temperature:</strong> ${txTemp} °C</li>
+            <li><strong>Transmitter:</strong> ${tx.name}</li>
+        </ul>
+    `;
+}
+
+function toRadians(deg) {
+    return deg * Math.PI / 180;
+}
+
+function toDegrees(rad) {
+    return rad * 180 / Math.PI;
+}
+
+function calculateDistanceKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = toRadians(lat2 - lat1);
+    const dLon = toRadians(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+function calculateAzimuth(lat1, lon1, lat2, lon2) {
+    const dLon = toRadians(lon2 - lon1);
+    const lat1Rad = toRadians(lat1);
+    const lat2Rad = toRadians(lat2);
+    const y = Math.sin(dLon) * Math.cos(lat2Rad);
+    const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+    const bearing = (toDegrees(Math.atan2(y, x)) + 360) % 360;
+    return bearing;
+}
+
+function calculateInverseAzimuth(lat1, lon1, lat2, lon2) {
+    const forward = calculateAzimuth(lat1, lon1, lat2, lon2);
+    return (forward + 180) % 360;
+}
+
+async function geocodeCity(city) {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(city)}`, {
+        headers: { 'Accept': 'application/json' }
+    });
+
+    if (!response.ok) {
+        throw new Error('Geocoding error');
+    }
+
+    const data = await response.json();
+    if (!data.length) {
+        throw new Error(`No location found for ${city}`);
+    }
+
+    return {
+        lat: parseFloat(data[0].lat),
+        lon: parseFloat(data[0].lon)
+    };
+}
+
+function clearMapMarkers() {
+    if (txMarker) map.removeLayer(txMarker);
+    if (rxMarker) map.removeLayer(rxMarker);
+    if (route) map.removeLayer(route);
+}
+
+async function calculateRoute() {
+    try {
+        const txCity = getValue('txCity').trim();
+        const rxCity = getValue('rxCity').trim();
+
+        if (!txCity || !rxCity) {
+            document.getElementById('output').innerHTML = '<p>Enter a TX city and an RX city.</p>';
+            return;
+        }
+
+        const [txPos, rxPos] = await Promise.all([geocodeCity(txCity), geocodeCity(rxCity)]);
+        const distanceKm = calculateDistanceKm(txPos.lat, txPos.lon, rxPos.lat, rxPos.lon);
+        const azimuth = calculateAzimuth(txPos.lat, txPos.lon, rxPos.lat, rxPos.lon);
+        const inverseAzimuth = calculateInverseAzimuth(txPos.lat, txPos.lon, rxPos.lat, rxPos.lon);
+
+        clearMapMarkers();
+
+        txMarker = L.marker([txPos.lat, txPos.lon]).addTo(map).bindPopup(`<b>TX:</b> ${txCity}`);
+        rxMarker = L.marker([rxPos.lat, rxPos.lon]).addTo(map).bindPopup(`<b>RX:</b> ${rxCity}`);
+        route = L.polyline([[txPos.lat, txPos.lon], [rxPos.lat, rxPos.lon]], { color: '#38bdf8', weight: 4, opacity: 0.85 }).addTo(map);
+        map.fitBounds(route.getBounds(), { padding: [30, 30] });
+
+        const routeHtml = `
+            <p><strong>Route calculated.</strong></p>
+            <ul>
+                <li><strong>Distance:</strong> ${distanceKm.toFixed(1)} km</li>
+                <li><strong>Azimuth:</strong> ${azimuth.toFixed(1)}°</li>
+                <li><strong>Reverse azimuth:</strong> ${inverseAzimuth.toFixed(1)}°</li>
+            </ul>
+        `;
+
+        calculateHF();
+        document.getElementById('output').insertAdjacentHTML('afterbegin', routeHtml);
+    } catch (error) {
+        document.getElementById('output').innerHTML = `<p>${error.message}</p>`;
+    }
+}
+
+function applyTheme(theme) {
+    document.body.setAttribute('data-theme', theme);
+    const toggle = document.querySelector('[data-action="toggle-theme"]');
+    if (toggle) {
+        toggle.textContent = theme === 'light' ? '🌙 Dark mode' : '☀️ Light mode';
+    }
+}
+
+function toggleTheme() {
+    const current = document.body.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    localStorage.setItem('hf-theme', current);
+    applyTheme(current);
+}
+
+function savePreset() {
+    const preset = {
+        frequency: getValue('frequency'),
+        power: getValue('power'),
+        antenna: getValue('antenna'),
+        tx: getValue('tx'),
+        txCity: getValue('txCity'),
+        rxCity: getValue('rxCity'),
+        lineLength: getValue('lineLength')
+    };
+
+    localStorage.setItem('hf-broadcast-preset', JSON.stringify(preset));
+    document.getElementById('presetStatus').textContent = 'Preset saved.';
+}
+
+function loadPreset() {
+    const stored = localStorage.getItem('hf-broadcast-preset');
+    if (!stored) {
+        document.getElementById('presetStatus').textContent = 'No preset found.';
+        return;
+    }
+
+    const preset = JSON.parse(stored);
+    document.getElementById('frequency').value = preset.frequency || 4.935;
+    document.getElementById('power').value = preset.power || 200;
+    document.getElementById('antenna').value = preset.antenna || 'yagi5';
+    document.getElementById('tx').value = preset.tx || 'tube';
+    document.getElementById('txCity').value = preset.txCity || 'Woofferton';
+    document.getElementById('rxCity').value = preset.rxCity || 'Budapest';
+    document.getElementById('lineLength').value = preset.lineLength || 30;
+
+    document.getElementById('presetStatus').textContent = 'Preset loaded.';
+    calculateHF();
+}
+
+const savedTheme = localStorage.getItem('hf-theme') || 'dark';
+applyTheme(savedTheme);
+
+calculateHF();
+
+</script>
+
+
+</body>
+</html>
